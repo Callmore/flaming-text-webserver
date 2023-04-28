@@ -50,11 +50,12 @@ func easeInCirc(x float64) float64 {
 	return 1 - math.Sqrt(1-math.Pow(x, 2))
 }
 
-const noiseScale = 1/3.
+const noiseScale = 1 / 3.
+
 var noise = opensimplex.NewNormalized(0)
 
 func getNoiseValue(x, y, z int) float64 {
-	return noise.Eval3(float64(x) * noiseScale, float64(y) * noiseScale, float64(z) * noiseScale)
+	return noise.Eval3(float64(x)*noiseScale, float64(y)*noiseScale, float64(z)*noiseScale)
 }
 
 type BurningText struct {
@@ -148,10 +149,15 @@ func (bt *BurningText) Process() {
 				continue
 			}
 
-			value := float64(bt.fireBuffer.AlphaAt(x, y+1).A)*0.6 +
+			flameInfluence := float64(bt.fireBuffer.AlphaAt(x, y+1).A)*0.6 +
 				float64(bt.fireBuffer.AlphaAt(x-1, y).A)*0.3 +
-				float64(bt.fireBuffer.AlphaAt(x, y+1).A)*0.1 -
-				1 - easeInCirc(getNoiseValue(x, y, bt.t))*64
+				float64(bt.fireBuffer.AlphaAt(x, y+1).A)*0.1
+
+			if flameInfluence <= 1 {
+				continue
+			}
+
+			value := flameInfluence - 1 - easeInCirc(getNoiseValue(x, y, bt.t))*64
 
 			// Make sure the resulting value fits in a byte
 			result := math.Round(math.Max(value, float64(newFireBuffer.AlphaAt(x, y).A)))
