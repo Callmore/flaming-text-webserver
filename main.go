@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"flamingTextWebserver/burningtext"
 	"fmt"
 	"image/png"
 	"net/http"
@@ -33,19 +34,16 @@ func generateFlamingText(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	img := generateNeosSpritesheet(text)
+	img := burningtext.GenerateNeosSpritesheet(text)
 
 	w.Header().Set("Content-Type", "image/png")
 	png.Encode(w, img)
 }
 
 var (
-	textToGenerate = flag.String("text", "", "Runs the generator once, generating the first 100 frames of the animation, and a sheet of 5 frames. Outputs into a folder named \"out\" if it exists. Stops the webserver from starting.")
 	cpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
 )
 
-var fontDirectory string
-var defaultFont string
 
 func main() {
 	godotenv.Load()
@@ -64,14 +62,6 @@ func main() {
 			panic(err)
 		}
 		defer pprof.StopCPUProfile()
-	}
-
-	fontDirectory = os.Getenv("FONT_DIRECTORY")
-	defaultFont = os.Getenv("DEFAULT_FONT")
-
-	if *textToGenerate != "" {
-		generateSingleText(*textToGenerate)
-		return
 	}
 
 	http.HandleFunc("/", generateFlamingText)

@@ -1,7 +1,6 @@
-package main
+package burningtext
 
 import (
-	"flamingTextWebserver/burningtext"
 	"fmt"
 	"image"
 	"image/draw"
@@ -10,8 +9,8 @@ import (
 	"path/filepath"
 )
 
-func generateSingleText(text string) {
-	img := generateNeosSpritesheet(text)
+func GenerateSingleText(text string) {
+	img := GenerateNeosSpritesheet(text)
 	file, err := os.Create("out/flaming.png")
 	if err != nil {
 		panic(err)
@@ -23,7 +22,7 @@ func generateSingleText(text string) {
 		panic(err)
 	}
 
-	for i, img := range generateAnimatedFrames(text) {
+	for i, img := range GenerateAnimatedFrames(text) {
 		file, err := os.Create(fmt.Sprintf("out/frames/img%d.png", i))
 		if err != nil {
 			panic(err)
@@ -37,8 +36,8 @@ func generateSingleText(text string) {
 	}
 }
 
-func generateNeosSpritesheet(text string) *image.RGBA {
-	burningText := burningtext.NewBurningText(text, filepath.Join(fontDirectory, defaultFont))
+func GenerateNeosSpritesheet(text string) *image.RGBA {
+	burningText := NewBurningText(text, filepath.Join(getFontDirectory(), getFontName()))
 
 	for i := 0; i < 50; i++ {
 		burningText.Process()
@@ -67,8 +66,8 @@ func stackImage(images []*image.RGBA) *image.RGBA {
 	return resultImage
 }
 
-func generateAnimatedFrames(text string) []*image.RGBA {
-	burningText := burningtext.NewBurningText(text, filepath.Join(fontDirectory, defaultFont))
+func GenerateAnimatedFrames(text string) []*image.RGBA {
+	burningText := NewBurningText(text, filepath.Join(getFontDirectory(), getFontName()))
 
 	images := make([]*image.RGBA, 0)
 
@@ -79,4 +78,20 @@ func generateAnimatedFrames(text string) []*image.RGBA {
 	}
 
 	return images
+}
+
+func getFontDirectory() string {
+	value, ok := os.LookupEnv("FONT_DIRECTORY")
+	if !ok {
+		panic("FONT_DIRECTORY environment variable not set")
+	}
+	return value
+}
+
+func getFontName() string {
+	value, ok := os.LookupEnv("FONT_NAME")
+	if !ok {
+		panic("FONT_NAME environment variable not set")
+	}
+	return value
 }
