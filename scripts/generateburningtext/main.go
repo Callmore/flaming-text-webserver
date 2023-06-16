@@ -10,7 +10,6 @@ import (
 	"image/png"
 	"os"
 	"runtime/pprof"
-	"strings"
 
 	"flamingTextWebserver/burningtext"
 	"flamingTextWebserver/palletising"
@@ -18,16 +17,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Set here to avoid a windows defender false positive (i'm not kidding it's so dumb)
-const gifSpeed = 2
-
 var (
 	cpuProfile     = flag.String("cpuprofile", "", "write cpu profile to file")
 	textToGenerate = flag.String("text", "", "Runs the generator once, generating the first 100 frames of the animation, and a sheet of 5 frames. Outputs into a folder named \"out\" if it exists. Stops the webserver from starting.")
 	outputFormat   = flag.String("format", "gif", "Format of the output. Can be \"gif\" or \"neos\"")
 	burningSpeed   = flag.String("speed", "fast", "Speed of the animation. Can be \"slow\" or \"fast\"")
 	outputLocation = flag.String("output", "", "Location to output the generated files to. Defaults to \"out\"")
-	fontPath       = flag.String("font", "", "Path to the font to use. Use semicolon to separate multiple paths.")
+	fontChain      = flag.String("font", "agate", "Name of the font chain to use. Font chains can be specified in fonts.json.")
 )
 
 func init() {
@@ -54,7 +50,7 @@ func main() {
 		panic("no text provided to generate")
 	}
 
-	fontChain := strings.Split(*fontPath, ";")
+	fontChain := *fontChain
 
 	speed := burningtext.SpeedFast
 	if (*burningSpeed) == "slow" {
@@ -72,7 +68,6 @@ func main() {
 
 	switch *outputFormat {
 	case "gif":
-		pal := palletising.LoadJSONPalette("palette.json")
 		frames := burningtext.GenerateAnimatedFrames(settings)
 		delaySlice := make([]int, len(frames))
 		disposal := make([]byte, len(frames))
@@ -85,13 +80,13 @@ func main() {
 			}
 
 			disposal[i] = gif.DisposalPrevious
-			palettedFrames[i] = palletising.Palletise(frames[i], pal)
+			palettedFrames[i] = palletising.Palletise(frames[i])
 		}
 
 		// TODO: Implement palletization
 		gif.EncodeAll(outputWriter, &gif.GIF{
-			Image: palettedFrames,
-			Delay: delaySlice,
+			Image:    palettedFrames,
+			Delay:    delaySlice,
 			Disposal: disposal,
 		})
 

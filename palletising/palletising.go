@@ -8,12 +8,17 @@ import (
 	"os"
 )
 
-func Palletise(inImage *image.RGBA, palette color.Palette) *image.Paletted {
+var palette color.Palette = nil
+
+func Palletise(inImage *image.RGBA) *image.Paletted {
+	if palette == nil {
+		palette = LoadJSONPalette(os.Getenv("PALETTE_PATH"))
+	}
+
 	bounds := inImage.Bounds()
 	paletted := image.NewPaletted(bounds, palette)
 
 	draw.Draw(paletted, bounds, inImage, image.Point{}, draw.Src)
-	// draw.FloydSteinberg.Draw(paletted, bounds, inImage, image.Point{})
 
 	return paletted
 }

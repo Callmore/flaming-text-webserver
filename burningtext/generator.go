@@ -1,6 +1,7 @@
 package burningtext
 
 import (
+	"encoding/json"
 	"image"
 	"image/draw"
 	"os"
@@ -17,15 +18,49 @@ const (
 type BurningTextSettings struct {
 	Text      string
 	Speed     BurningSpeed
-	FontChain []string
+	FontChain string
+}
+
+var fontChains map[string][]string = nil
+
+func (settings BurningTextSettings) GetFontChain() []string {
+	if settings.FontChain == "" {
+		return getDefaultFontChain()
+	}
+
+	if fontChains == nil {
+		loadFontChainsData()
+	}
+
+	return fontChains[settings.FontChain]
+}
+
+func loadFontChainsData() {
+	file, err := os.Open(os.Getenv("FONTCHAINS_PATH"))
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&fontChains)
+
+	if err != nil {
+		panic(err)
+	}
+}
+
+func IsFontChainValid(fontChain string) bool {
+	if fontChains == nil {
+		loadFontChainsData()
+	}
+
+	_, ok := fontChains[fontChain]
+	return ok
 }
 
 func generateBurningTextImages(settings BurningTextSettings) []*image.RGBA {
-	if settings.FontChain == nil {
-		settings.FontChain = getDefaultFontChain()
-	}
-
-	burningText := NewBurningText(settings.Text, settings.FontChain[0])
+	burningText := NewBurningText(settings.Text, settings.GetFontChain()[0])
 
 	for i := 0; i < 50; i++ {
 		burningText.Process()
@@ -53,21 +88,18 @@ func generateBurningTextImages(settings BurningTextSettings) []*image.RGBA {
 	return images
 }
 
-
-
 func GenerateNeosSpritesheet(settings BurningTextSettings) *image.RGBA {
 	images := generateBurningTextImages(settings)
 
 	return stackImage(images)
 }
 
-
-
 func GenerateAnimatedFrames(settings BurningTextSettings) []*image.RGBA {
 	images := generateBurningTextImages(settings)
 
 	return images
 }
+
 func stackImage(images []*image.RGBA) *image.RGBA {
 	resultImage := image.NewRGBA(image.Rect(0, 0, images[0].Rect.Max.X, images[0].Rect.Max.Y*len(images)))
 
@@ -77,6 +109,7 @@ func stackImage(images []*image.RGBA) *image.RGBA {
 
 	return resultImage
 }
+
 func getDefaultFontChain() []string {
 	value, ok := os.LookupEnv("FONT")
 	if !ok {
