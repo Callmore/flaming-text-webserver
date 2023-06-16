@@ -7,7 +7,6 @@ import (
 	"image/png"
 	"net/http"
 	"os"
-	"runtime/pprof"
 
 	"github.com/joho/godotenv"
 )
@@ -40,29 +39,12 @@ func generateFlamingText(w http.ResponseWriter, req *http.Request) {
 	png.Encode(w, img)
 }
 
-var (
-	cpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
-)
 
 
 func main() {
 	godotenv.Load()
 
 	flag.Parse()
-
-	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-
-		err = pprof.StartCPUProfile(f)
-		if err != nil {
-			panic(err)
-		}
-		defer pprof.StopCPUProfile()
-	}
 
 	http.HandleFunc("/", generateFlamingText)
 
