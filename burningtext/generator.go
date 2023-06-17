@@ -15,25 +15,7 @@ const (
 	SpeedSlow
 )
 
-type BurningTextSettings struct {
-	Text      string
-	Speed     BurningSpeed
-	FontChain string
-}
-
 var fontChains map[string][]string = nil
-
-func (settings BurningTextSettings) GetFontChain() []string {
-	if settings.FontChain == "" {
-		return getDefaultFontChain()
-	}
-
-	if fontChains == nil {
-		loadFontChainsData()
-	}
-
-	return fontChains[settings.FontChain]
-}
 
 func loadFontChainsData() {
 	file, err := os.Open(os.Getenv("FONTCHAINS_PATH"))
@@ -59,48 +41,7 @@ func IsFontChainValid(fontChain string) bool {
 	return ok
 }
 
-func generateBurningTextImages(settings BurningTextSettings) []*image.RGBA {
-	burningText := NewBurningText(settings.Text, settings.GetFontChain()[0])
-
-	for i := 0; i < 50; i++ {
-		burningText.Process()
-	}
-
-	images := make([]*image.RGBA, 0)
-
-	switch settings.Speed {
-	case SpeedFast:
-		for i := 0; i < 5; i++ {
-			for k := 0; k < 3; k++ {
-				burningText.Process()
-			}
-
-			images = append(images, burningText.Draw())
-		}
-
-	case SpeedSlow:
-		for i := 0; i < 50; i++ {
-			burningText.Process()
-
-			images = append(images, burningText.Draw())
-		}
-	}
-	return images
-}
-
-func GenerateNeosSpritesheet(settings BurningTextSettings) *image.RGBA {
-	images := generateBurningTextImages(settings)
-
-	return stackImage(images)
-}
-
-func GenerateAnimatedFrames(settings BurningTextSettings) []*image.RGBA {
-	images := generateBurningTextImages(settings)
-
-	return images
-}
-
-func stackImage(images []*image.RGBA) *image.RGBA {
+func StackImage(images []*image.RGBA) *image.RGBA {
 	resultImage := image.NewRGBA(image.Rect(0, 0, images[0].Rect.Max.X, images[0].Rect.Max.Y*len(images)))
 
 	for i, img := range images {

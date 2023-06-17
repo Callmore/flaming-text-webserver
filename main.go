@@ -4,16 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"image/gif"
 	"image/png"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"flamingTextWebserver/burningtext"
 	"flamingTextWebserver/palletising"
 
 	"github.com/joho/godotenv"
+	"github.com/lucasb-eyer/go-colorful"
 )
 
 type CoolTextResponse struct {
@@ -70,7 +74,7 @@ func generateFlamingText(w http.ResponseWriter, req *http.Request) {
 
 	font := strings.ToLower(query.Get("font"))
 	if font == "" {
-		font = "agate"
+		font = os.Getenv("DEFAULT_FONT_CHAIN")
 	}
 	if !burningtext.IsFontChainValid(font) {
 		w.WriteHeader(400)
@@ -78,10 +82,47 @@ func generateFlamingText(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	settings := burningtext.BurningTextSettings{
+	var flameColor color.Color = nil
+	flameColorString := strings.ToLower(query.Get("flamecolor"))
+	if flameColorString != "" {
+		var err error
+		flameColor, err = colorful.Hex("#" + flameColorString)
+		if err != nil {
+			w.WriteHeader(400)
+			fmt.Fprintf(w, "Invalid flame color")
+			return
+		}
+	}
+
+	var textColor color.Color = nil
+	textColorString := strings.ToLower(query.Get("textcolor"))
+	if textColorString != "" {
+		var err error
+		textColor, err = colorful.Hex("#" + textColorString)
+		if err != nil {
+			w.WriteHeader(400)
+			fmt.Fprintf(w, "Invalid text color")
+			return
+		}
+	}
+
+	randomColor := false
+	randomColorString := strings.ToLower(query.Get("randomcolor"))
+	if randomColorString != "" {
+		if randomColorString == "true" {
+			randomColor = true
+		}
+	}
+
+
+	settings := burningtext.BurningTextOptions{
 		Text:      text,
 		Speed:     speed,
 		FontChain: font,
+
+		FlameColor:  flameColor,
+		TextColor:   textColor,
+		RandomColor: randomColor,
 	}
 
 	switch format {
@@ -96,11 +137,13 @@ func generateFlamingText(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func generateGif(w http.ResponseWriter, settings burningtext.BurningTextSettings) {
-	frames := burningtext.GenerateAnimatedFrames(settings)
+func generateGif(w http.ResponseWriter, settings burningtext.BurningTextOptions) {
+	burningText := burningtext.New(&settings)
+	frames := burningText.GenerateBurningTextImages()
 	delaySlice := make([]int, len(frames))
 	disposal := make([]byte, len(frames))
 	palettedFrames := make([]*image.Paletted, len(frames))
+	pal := burningText.GeneratePalette()
 	for i := 0; i < len(frames); i++ {
 		if settings.Speed == burningtext.SpeedFast {
 			delaySlice[i] = 5
@@ -109,7 +152,7 @@ func generateGif(w http.ResponseWriter, settings burningtext.BurningTextSettings
 		}
 
 		disposal[i] = gif.DisposalPrevious
-		palettedFrames[i] = palletising.Palletise(frames[i])
+		palettedFrames[i] = palletising.Palletise(frames[i], pal)
 	}
 
 	w.Header().Set("Content-Type", "image/gif")
@@ -121,10 +164,16 @@ func generateGif(w http.ResponseWriter, settings burningtext.BurningTextSettings
 	})
 }
 
-func generateNeos(w http.ResponseWriter, settings burningtext.BurningTextSettings) {
-	image := burningtext.GenerateNeosSpritesheet(settings)
+func generateNeos(w http.ResponseWriter, options burningtext.BurningTextOptions) {
+	burningText := burningtext.New(&options)
+	frames := burningText.GenerateBurningTextImages()
+	image := burningtext.StackImage(frames)
 	w.Header().Set("Content-Type", "image/png")
 	png.Encode(w, image)
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
