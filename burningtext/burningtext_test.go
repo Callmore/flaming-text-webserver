@@ -6,11 +6,11 @@ import (
 )
 
 func TestColorLerp(t *testing.T) {
-	colorList := []color.RGBA{
-		{R: 0, G: 0, B: 0, A: 255},
-		{R: 255, G: 0, B: 0, A: 255},
-		{R: 0, G: 255, B: 0, A: 255},
-		{R: 0, G: 0, B: 255, A: 255},
+	colorList := []color.Color{
+		color.RGBA{R: 0, G: 0, B: 0, A: 255},
+		color.RGBA{R: 255, G: 0, B: 0, A: 255},
+		color.RGBA{R: 0, G: 255, B: 0, A: 255},
+		color.RGBA{R: 0, G: 0, B: 255, A: 255},
 	}
 
 	t.Log(lerpColorList(colorList, 0));

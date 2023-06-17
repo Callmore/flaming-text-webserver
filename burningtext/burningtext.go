@@ -4,26 +4,20 @@ import (
 	"image"
 	"image/color"
 	"math"
+	"math/rand"
 	"os"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
+	colorful "github.com/lucasb-eyer/go-colorful"
 	opensimplex "github.com/ojrac/opensimplex-go"
 )
 
 const pixelsToPt = 1.0 / 0.75
 
-// "#6a0500", "#c93900", "#ff9500", "#ffeb05"
-var burningColors = []color.RGBA{
-	{R: 106, G: 5, B: 0, A: 255},
-	{R: 201, G: 57, B: 0, A: 255},
-	{R: 255, G: 149, B: 0, A: 255},
-	{R: 255, G: 235, B: 5, A: 255},
-}
-
-func lerpColorList(colors []color.RGBA, t float64) color.RGBA {
+func lerpColorList(colors []color.Color, t float64) color.Color {
 	if t <= 0 {
 		return colors[0]
 	}
@@ -35,15 +29,54 @@ func lerpColorList(colors []color.RGBA, t float64) color.RGBA {
 	colorIndex := int(t)
 	localT := t - float64(colorIndex)
 
-	c1 := colors[colorIndex]
-	c2 := colors[colorIndex+1]
+	c1, _ := colorful.MakeColor(colors[colorIndex])
+	c2, _ := colorful.MakeColor(colors[colorIndex+1])
 
-	return color.RGBA{
-		R: uint8(float64(c1.R)*(1-localT) + float64(c2.R)*localT),
-		G: uint8(float64(c1.G)*(1-localT) + float64(c2.G)*localT),
-		B: uint8(float64(c1.B)*(1-localT) + float64(c2.B)*localT),
-		A: uint8(float64(c1.A)*(1-localT) + float64(c2.A)*localT),
+	return c1.BlendLab(c2, localT).Clamped()
+}
+
+var (
+	colorfulWhite = colorful.Color{R: 1, G: 1, B: 1}
+	colorfulBlack = colorful.Color{R: 0, G: 0, B: 0}
+)
+
+// generateColorList generates a list of 4 colors that can be used to color the fire. The base colour is the 3rd colour in the list.
+func generateColorList(base color.Color) []color.Color {
+	baseColor, _ := colorful.MakeColor(base)
+
+	baseH, baseS, baseL := baseColor.Hsl()
+
+	brighter := colorful.Hsl(wrap(baseH+30, 360), baseS, math.Min(baseL+0.05, 1))
+
+	darker := colorful.Hsl(wrap(baseH-30, 360), baseS, baseL)
+	darker = darker.BlendLab(colorfulBlack, 0.5)
+
+	darkest := colorful.Hsl(wrap(baseH-45, 360), baseS, baseL)
+	darkest = darkest.BlendLab(colorfulBlack, 0.75)
+
+	return []color.Color{
+		darkest.Clamped(),
+		darker.Clamped(),
+		base,
+		brighter.Clamped(),
 	}
+}
+
+func (bt *BurningText) GeneratePalette() []color.Color {
+	pal := color.Palette{}
+
+	pal = append(pal, color.Alpha{A: 0})
+
+	for i := 0; i < 254; i++ {
+		if (float64(i) / 253) > 1 {
+			panic("i is too big")
+		}
+		pal = append(pal, lerpColorList(bt.fireColors, float64(i)/253))
+	}
+
+	pal = append(pal, bt.textColor)
+
+	return pal
 }
 
 func easeInCirc(x float64) float64 {
@@ -58,6 +91,14 @@ func getNoiseValue(x, y, z int) float64 {
 	return noise.Eval3(float64(x)*noiseScale, float64(y)*noiseScale, float64(z)*noiseScale)
 }
 
+func wrap(x float64, max float64) float64 {
+	ret := math.Mod(x, max)
+	if ret < 0 {
+		ret += max
+	}
+	return ret
+}
+
 type BurningText struct {
 	text string
 
@@ -67,10 +108,17 @@ type BurningText struct {
 	textMask   *image.Alpha
 	fireBuffer *image.Alpha
 
+	speed BurningSpeed
+
 	t int
+
+	fireColors []color.Color
+	textColor  color.Color
 }
 
-func NewBurningText(text, fontPath string) *BurningText {
+func New(options *BurningTextOptions) *BurningText {
+	fontPath := options.GetFontChain()[0]
+
 	fileBytes, err := os.ReadFile(fontPath)
 	if err != nil {
 		panic(err)
@@ -90,10 +138,10 @@ func NewBurningText(text, fontPath string) *BurningText {
 		panic(err)
 	}
 
-	width := font.MeasureString(face, text)
+	bounds, width := font.BoundString(face, options.Text)
 
-	imageWidth := int((float64(width) / 64) * 1.1)
-	imageHeight := int(70 * 1.5)
+	imageWidth := int((float64(bounds.Max.X.Ceil() - bounds.Min.X.Ceil())) + 20)
+	imageHeight := int((float64(bounds.Max.Y.Ceil() - bounds.Min.Y.Ceil())) + 20)
 
 	img := image.NewAlpha(image.Rect(0, 0, imageWidth, imageHeight))
 
@@ -101,14 +149,39 @@ func NewBurningText(text, fontPath string) *BurningText {
 		Dst:  img,
 		Src:  image.White,
 		Face: face,
-		Dot:  fixed.P((imageWidth/2)-(width.Round()/2), 70+16),
+		Dot:  fixed.P((imageWidth/2)-(((width.Ceil())/2)+bounds.Min.X.Ceil()/2), -bounds.Min.Y.Ceil()+19),
 	}
 
-	drawer.DrawString(text)
+	drawer.DrawString(options.Text)
 
 	rect := image.Rect(0, 0, int(imageWidth), int(imageHeight))
 
-	return &BurningText{text: text, rect: rect, textMask: img, fireBuffer: image.NewAlpha(rect)}
+	var flameColor color.Color = color.RGBA{R: 255, G: 149, B: 0, A: 255}
+	var textColor color.Color = color.RGBA{R: 255, G: 0, B: 0, A: 255}
+
+	if options.RandomColor {
+		baseH := rand.Float64() * 360
+		flameColor = colorful.Hsv(wrap(baseH, 360), 1, 1).Clamped()
+		textColor = colorful.Hsv(wrap(baseH-30, 360), 1, 1).Clamped()
+	} else {
+		if options.FlameColor != nil {
+			flameColor = options.FlameColor
+		}
+		if options.TextColor != nil {
+			textColor = options.TextColor
+		}
+	}
+
+	return &BurningText{
+		text:       options.Text,
+		rect:       rect,
+		textMask:   img,
+		fireBuffer: image.NewAlpha(rect),
+
+		speed:      options.Speed,
+		fireColors: generateColorList(flameColor),
+		textColor:  textColor,
+	}
 }
 
 // Draw returns the current frame of the animation
@@ -118,9 +191,9 @@ func (bt *BurningText) Draw() *image.RGBA {
 	for x := 0; x < bt.rect.Dx(); x++ {
 		for y := 0; y < bt.rect.Dy(); y++ {
 			if bt.textMask.AlphaAt(x, y).A > 0 {
-				img.Set(x, y, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+				img.Set(x, y, bt.textColor) // color.RGBA{R: 255, G: 0, B: 0, A: 255})
 			} else if bt.fireBuffer.AlphaAt(x, y).A > 0 {
-				fireColor := lerpColorList(burningColors, float64(bt.fireBuffer.AlphaAt(x, y).A)/255)
+				fireColor := lerpColorList(bt.fireColors, float64(bt.fireBuffer.AlphaAt(x, y).A)/255)
 				img.Set(x, y, fireColor)
 			}
 		}
@@ -168,4 +241,31 @@ func (bt *BurningText) Process() {
 
 	bt.fireBuffer = newFireBuffer
 	bt.t++
+}
+
+func (bt *BurningText) GenerateBurningTextImages() []*image.RGBA {
+	for i := 0; i < 50; i++ {
+		bt.Process()
+	}
+
+	images := make([]*image.RGBA, 0)
+
+	switch bt.speed {
+	case SpeedFast:
+		for i := 0; i < 5; i++ {
+			for k := 0; k < 3; k++ {
+				bt.Process()
+			}
+
+			images = append(images, bt.Draw())
+		}
+
+	case SpeedSlow:
+		for i := 0; i < 50; i++ {
+			bt.Process()
+
+			images = append(images, bt.Draw())
+		}
+	}
+	return images
 }

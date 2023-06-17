@@ -2,3 +2,7 @@
 font/
 out/
 .env
+
+*.gif
+*.png
+/*.json
